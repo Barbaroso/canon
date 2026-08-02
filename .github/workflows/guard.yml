@@ -1,0 +1,160 @@
+name: Guard
+
+# The merge gate for this repository.
+#
+# Branch protection deliberately does NOT require approving reviews: the person
+# who assigns an issue to the coding agent is not allowed to approve the PR that
+# comes back, so on a one-maintainer repo `require approvals` is a deadlock.
+#
+# Instead the gate is a label the maintainer *can* apply, with two properties
+# that make it more than a rubber stamp:
+#
+#   1. the label must have been applied by a human account, not by a bot
+#   2. the label must be newer than the newest commit on the branch, so an agent
+#      cannot push after the review happened
+#
+# Both jobs are required status checks. Neither has a `paths:` filter, because a
+# required check that never runs blocks the merge forever.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions: {}
+
+jobs:
+  human-review:
+    name: human-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Require a fresh human-reviewed label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          label="human-reviewed"
+
+          event="$(gh api "repos/${REPO}/issues/${PR}/timeline" --paginate \
+            --jq "[.[] | select(.event == \"labeled\" and .label.name == \"${label}\")] | last")"
+
+          if [ -z "${event}" ] || [ "${event}" = "null" ]; then
+            echo "::error::This PR has no '${label}' label."
+            echo "Review the diff, then add the label. See PROMPTS.md for the checklist."
+            exit 1
+          fi
+
+          actor="$(echo "${event}" | jq -r '.actor.login')"
+          actor_type="$(echo "${event}" | jq -r '.actor.type')"
+          label_ts="$(echo "${event}" | jq -r '.created_at')"
+
+          case "${actor_type}:${actor}" in
+            User:*'[bot]') echo "::error::'${label}' was applied by ${actor}, which is a bot."; exit 1 ;;
+            User:*) : ;;
+            *) echo "::error::'${label}' was applied by ${actor} (${actor_type}), not a human user."; exit 1 ;;
+          esac
+
+          head_ts="$(gh api "repos/${REPO}/commits/${HEAD_SHA}" --jq '.commit.committer.date')"
+
+          label_epoch="$(date -u -d "${label_ts}" +%s)"
+          head_epoch="$(date -u -d "${head_ts}" +%s)"
+
+          if [ "${head_epoch}" -gt "${label_epoch}" ]; then
+            echo "::error::The branch moved after it was reviewed."
+            echo "  label '${label}' applied by ${actor} at ${label_ts}"
+            echo "  head commit ${HEAD_SHA} authored at ${head_ts}"
+            echo "Re-read the diff and re-apply the label."
+            exit 1
+          fi
+
+          echo "Reviewed by ${actor} at ${label_ts}; head ${HEAD_SHA} at ${head_ts}."
+
+  sensitive-paths:
+    name: sensitive-paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Require security-reviewed for security-critical paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Files where a bad change is not recoverable by "we'll fix it later".
+          # Keep this list in sync with .github/CODEOWNERS.
+          patterns='^\.github/workflows/
+          ^\.github/copilot-instructions\.md$
+          ^package\.json$
+          ^pnpm-lock\.yaml$
+          ^SPEC\.md$
+          ^AGENTS\.md$
+          ^src/rules/promote\.ts$
+          ^src/io/layer/
+          ^src/core/redact/
+          ^src/gates/
+          ^\.canon/gates\.'
+
+          changed="$(gh api "repos/${REPO}/pulls/${PR}/files" --paginate --jq '.[].filename')"
+
+          hits=""
+          while IFS= read -r f; do
+            [ -n "${f}" ] || continue
+            while IFS= read -r p; do
+              p="$(echo "${p}" | sed 's/^[[:space:]]*//')"
+              [ -n "${p}" ] || continue
+              if echo "${f}" | grep -Eq "${p}"; then
+                hits="${hits}${f}"$'\n'
+                break
+              fi
+            done <<< "${patterns}"
+          done <<< "${changed}"
+
+          if [ -z "${hits}" ]; then
+            echo "No security-critical path touched."
+            exit 0
+          fi
+
+          echo "Security-critical paths in this PR:"
+          echo "${hits}" | sed '/^$/d' | sed 's/^/  /'
+
+          label="security-reviewed"
+          event="$(gh api "repos/${REPO}/issues/${PR}/timeline" --paginate \
+            --jq "[.[] | select(.event == \"labeled\" and .label.name == \"${label}\")] | last")"
+
+          if [ -z "${event}" ] || [ "${event}" = "null" ]; then
+            echo "::error::This PR changes security-critical files and has no '${label}' label."
+            exit 1
+          fi
+
+          actor="$(echo "${event}" | jq -r '.actor.login')"
+          actor_type="$(echo "${event}" | jq -r '.actor.type')"
+          label_ts="$(echo "${event}" | jq -r '.created_at')"
+
+          case "${actor_type}:${actor}" in
+            User:*'[bot]') echo "::error::'${label}' was applied by ${actor}, which is a bot."; exit 1 ;;
+            User:*) : ;;
+            *) echo "::error::'${label}' was applied by ${actor} (${actor_type}), not a human user."; exit 1 ;;
+          esac
+
+          head_ts="$(gh api "repos/${REPO}/commits/${HEAD_SHA}" --jq '.commit.committer.date')"
+          if [ "$(date -u -d "${head_ts}" +%s)" -gt "$(date -u -d "${label_ts}" +%s)" ]; then
+            echo "::error::Security-critical files changed after '${label}' was applied. Re-review."
+            exit 1
+          fi
+
+          echo "Security-reviewed by ${actor} at ${label_ts}."

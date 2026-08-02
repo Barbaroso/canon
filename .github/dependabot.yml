@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit shas in this repo, so without Dependabot they
+  # never move. This is what makes sha pinning safe rather than just stale.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - blocked
+    commit-message:
+      prefix: chore
+      include: scope
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - blocked
+    commit-message:
+      prefix: chore
+      include: scope
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        patterns:
+          - "@biomejs/*"
+          - "vitest"
+          - "@vitest/*"
+          - "vite"
+          - "tsup"
+          - "tsx"
+          - "typescript"
+        update-types:
+          - minor
+          - patch
