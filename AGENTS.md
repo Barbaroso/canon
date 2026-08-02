@@ -49,6 +49,10 @@ Run a single test: `pnpm vitest run src/rules/promote.test.ts`
    user's workflow must continue. If a gate fails, the commit is blocked.
 5. **No LLM call is required for v1 core.** Rule extraction is deterministic
    (gate id + file path + template). LLM-assisted phrasing is an adapter.
+6. **Layer direction is one-way.** Rule resolution is repo > org > personal.
+   A repo rule may suppress an inherited one; a personal or org rule may never
+   suppress a repo rule. `~/.canon/cache/` is read-only — no code path writes
+   to a fetched layer.
 
 ## Code style
 
