@@ -45,18 +45,32 @@ Run a single test: `pnpm vitest run src/rules/promote.test.ts`
    Network access is confined to `src/adapters/**` and is opt-in.
 3. **Git is the database.** Do not add SQLite, Postgres, or any vector store.
    State lives in `.canon/` as plain files.
-4. **Fail-open for CANON, fail-closed for gates.** If CANON itself errors, the
-   user's workflow must continue. If a gate fails, the commit is blocked.
+4. **Fail-open for injection, fail-closed for gates.** If CANON cannot answer
+   an MCP call or a `SessionStart` hook, the coding agent keeps working. If a
+   gate fails *or cannot run*, the commit is blocked — exit 1 and exit 2 are
+   both blocking. A gate that did not run is never a pass.
 5. **No LLM call is required for v1 core.** Rule extraction is deterministic
    (gate id + file path + template). LLM-assisted phrasing is an adapter.
 6. **Layer direction is one-way.** Rule resolution is repo > org > personal.
    A repo rule may suppress an inherited one; a personal or org rule may never
    suppress a repo rule. `~/.canon/cache/` is read-only — no code path writes
    to a fetched layer.
+7. **Untrusted text is never an instruction, a path, or an argv.** Gate output,
+   inherited layer prose, fetched filenames and model output are tier T3
+   (SPEC.md 4.1). A T3 string is never shell-executed, never used to build a
+   filesystem path, and never reaches Layer A. Candidate `check` text comes
+   from the adapter's phrase table, never from the gate's message.
+8. **Rules advise, gates enforce.** No rule, from any layer, changes what runs.
+   Only `gates.yml` decides that, and shrinking the enforced set requires a
+   visible `gates.lock` diff. Do not add a config key, flag or rule field that
+   can disable a gate.
 
 ## Code style
 
-- Named exports only, no default exports.
+- Named exports only, no default exports. The single exception is a build or
+  test config file that the tool itself requires to default-export
+  (`vitest.config.ts`, `tsup.config.ts`, `biome` has none). Nothing under
+  `src/` is exempt.
 - Errors: return `Result<T, E>` from core functions; only the CLI layer throws.
 - No `any`. Use `unknown` and narrow with zod.
 - File names kebab-case; types PascalCase; functions camelCase.
@@ -78,10 +92,22 @@ Run a single test: `pnpm vitest run src/rules/promote.test.ts`
 
 ## Security rules
 
-- Never write file contents into `provenance.jsonl`. Hashes only.
-- Never log secrets, tokens, or environment variables.
-- Any rule whose effect is to disable an existing gate is rejected at
-  promotion time. This is a hard invariant with a dedicated test.
+- Never write file contents into `provenance.jsonl`. Hashes, ids, closed enum
+  members and ISO timestamps only — enforced by a closed TypeScript record
+  type, not by a runtime filter.
+- Never log secrets, tokens, or environment variables. Every gate adapter runs
+  its message through `src/core/redact/` before that message is persisted or
+  printed.
+- Gate adapters build their messages from an allowlist of structured fields.
+  The gitleaks adapter reads `RuleID`, `File` and `StartLine` and discards
+  `Secret`, `Match` and `Line` at the parse boundary.
+- Process execution is `spawn(bin, argv, { shell: false })` only.
+  `child_process.exec` and `execSync` must not appear anywhere in `src/`.
+- Filesystem paths for cached layers are derived from a digest, never from
+  user-supplied text, and are asserted to resolve inside `~/.canon/cache/`.
+- `advisoryWeakeningWarning` is a **usability aid, not a security control**.
+  Do not describe it as an invariant and do not rely on it to stop anything.
+  The control that stops a gate being switched off is `gates.lock`.
 
 ## PR conventions
 

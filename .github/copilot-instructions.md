@@ -20,7 +20,7 @@ contract.
    ```
    If any fails and you cannot fix it in three attempts, open the PR as a draft
    and explain precisely what is failing and what you tried.
-4. **Self-review your diff** against the five architecture boundaries in
+4. **Self-review your diff** against the eight architecture boundaries in
    `AGENTS.md`. State PASS or FAIL for each in the PR description with a
    one-line reason.
 5. **No new dependencies** beyond the stack in `AGENTS.md`. If you are certain
@@ -36,12 +36,22 @@ contract.
   easier to write.
 - `src/core/**` must not import `node:fs`, `node:http`, `node:https`, or any
   network client.
-- `provenance.jsonl` contains hashes, ids and ISO timestamps only. Never file
-  contents, secrets, environment values, or user identifiers.
+- `child_process.exec` and `execSync` must not appear anywhere in `src/`.
+  Use `spawn(bin, argv, { shell: false })`. No argv element may be derived from
+  gate output or from an inherited rule layer.
+- A candidate's `when`, `check` and `because` are produced by a template. Text
+  taken from a gate's output must never appear in any of them, in
+  `constitution.md`, or in Layer A. See SPEC.md 4.1, tier T3.
+- `gates.yml` has no `command`, `args`, `env`, `shell`, `cwd` or `script` key.
+  If you find yourself wanting one, you have misread the spec.
+- `provenance.jsonl` contains hashes, ids, closed enum members and ISO
+  timestamps only. Never file contents, file paths, secrets, environment values,
+  or user identifiers.
 - `canon_constitution()` output is byte-identical between calls when no rules
   changed. This protects prompt caching; do not add timestamps to it.
-- If CANON itself fails, the user's workflow continues (fail-open). If a gate
-  fails, the commit is blocked (fail-closed). Do not mix these up.
+- Injection fails open: if CANON cannot answer, the agent keeps working. Gates
+  fail closed: exit 1 (violations) and exit 2 (a gate could not run) are both
+  blocking. A gate that did not run is never reported as a pass.
 
 ## PR description template
 
@@ -61,8 +71,11 @@ One paragraph.
 1. Separation of powers: PASS/FAIL — reason
 2. No network in core: PASS/FAIL — reason
 3. Git is the database: PASS/FAIL — reason
-4. Fail-open / fail-closed: PASS/FAIL — reason
+4. Fail-open injection / fail-closed gates: PASS/FAIL — reason
 5. No LLM call in v1 core: PASS/FAIL — reason
+6. Layer direction is one-way: PASS/FAIL — reason
+7. Untrusted text is never an instruction, path or argv: PASS/FAIL — reason
+8. Rules advise, gates enforce: PASS/FAIL — reason
 
 ## Out of scope, noticed while working
 - ...
