@@ -1,0 +1,35 @@
+{
+	"name": "canon-cli",
+	"version": "0.1.0",
+	"private": true,
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Barbaroso/canon.git"
+	},
+	"type": "module",
+	"bin": {
+		"canon": "dist/cli.js"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"packageManager": "pnpm@9.15.9",
+	"scripts": {
+		"build": "tsup",
+		"lint": "biome check .",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"commander": "^12.1.0",
+		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/node": "^22.10.1",
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	}
+}
