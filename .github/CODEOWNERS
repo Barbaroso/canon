@@ -1,0 +1,27 @@
+# Every change needs the maintainer's eyes.
+* @Barbaroso
+
+# Paths where a bad change is not recoverable by "we'll fix it in the next PR".
+# Keep this list in sync with the `sensitive-paths` job in
+# .github/workflows/guard.yml — that job is what actually blocks the merge;
+# CODEOWNERS only requests the review.
+
+# The agent's own environment and instructions.
+/.github/workflows/          @Barbaroso
+/.github/copilot-instructions.md @Barbaroso
+/.github/CODEOWNERS          @Barbaroso
+
+# The contract the agent implements literally.
+/SPEC.md                     @Barbaroso
+/AGENTS.md                   @Barbaroso
+
+# Dependency surface.
+/package.json                @Barbaroso
+/pnpm-lock.yaml              @Barbaroso
+
+# The only writer into rules/active/, and everything that handles untrusted
+# input: fetched layers, gate output, redaction.
+/src/rules/promote.ts        @Barbaroso
+/src/io/layer/               @Barbaroso
+/src/core/redact/            @Barbaroso
+/src/gates/                  @Barbaroso
