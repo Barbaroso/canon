@@ -6,8 +6,12 @@ Security updates are provided for the latest commit on the default branch.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please report it privately by email to
-security@canon.local. Include:
+If you discover a security vulnerability, please report it privately through
+GitHub's private vulnerability reporting flow:
+
+https://github.com/Barbaroso/canon/security/advisories/new
+
+Include:
 
 - A clear description of the issue and potential impact
 - Steps to reproduce

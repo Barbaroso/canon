@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   checks:
@@ -27,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm build
+
       - name: Lint
         run: pnpm lint
 
@@ -35,3 +43,13 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Verify CLI version
+        run: test "$(node dist/cli.js --version)" = "0.1.0"
+
+      - name: Verify CLI help has no subcommands
+        run: |
+          help_output="$(node dist/cli.js --help)"
+          printf '%s\n' "$help_output"
+          printf '%s\n' "$help_output" | grep -q "Usage: canon \[options\]"
+          ! printf '%s\n' "$help_output" | grep -q "Commands:"

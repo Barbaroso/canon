@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 
 export const createCli = (): Command => {
@@ -14,4 +16,18 @@ export const run = async (argv: string[] = process.argv): Promise<void> => {
 	await program.parseAsync(argv);
 };
 
-void run();
+const isMainModule = (): boolean => {
+	const entryPoint = process.argv[1];
+	if (!entryPoint) {
+		return false;
+	}
+
+	return fileURLToPath(import.meta.url) === resolve(entryPoint);
+};
+
+if (isMainModule()) {
+	run().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
+	});
+}
